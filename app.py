@@ -70,7 +70,7 @@ df["category"] = df["category"].apply(lambda x: x.lower())
 
 colum = ["_id", "diet", "diabetes", "allergy", "protein", "calories", "carb", "fat", "type", "class"]
 meal_data = df[colum]
-display(meal_data)
+# display(meal_data)
 
 meal_data = meal_data.copy()
 meal_data["diabetes"] = meal_data["diabetes"].astype(int)
@@ -86,7 +86,7 @@ for col in cat_col:
     encoder = LabelEncoder()
     encoder.fit(meal_data[col])
     encoders[col] = encoder
-display(meal_data)
+# display(meal_data)
 
 encoded_values_range = {}
 for col in cat_col:
