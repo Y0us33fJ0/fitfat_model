@@ -7,3 +7,4 @@ pandas
 pymongo
 scikit-learn
 requests
+numpy<2
