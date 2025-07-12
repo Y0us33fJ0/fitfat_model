@@ -11,7 +11,7 @@ CORS(app)
 
 # classifier = pipeline("zero-shot-classification", model="facebook/bart-large-mnli")
 try:
-    classifier = pipeline("zero-shot-classification", model="typeform/distilbert-base-uncased-mnli")
+    classifier = pipeline("zero-shot-classification", model="valhalla/distilbart-mnli-12-1")
 except Exception as e:
     print(f"Error loading model: {e}")
     classifier = pipeline("zero-shot-classification", model="joeddav/xlm-roberta-large-xnli")
@@ -209,50 +209,32 @@ models_cache = {
 
 def get_or_train_model(columns):
     columns_tuple = tuple(sorted(columns))
-
     if columns_tuple in models_cache:
         return models_cache[columns_tuple]
 
-    print(f"train new model for columns: {columns}")
-
     X_train_new, X_temp_new = train_test_split(data_new[columns], test_size=0.2, random_state=42)
     X_val_new, X_test_new = train_test_split(X_temp_new, test_size=0.5, random_state=42)
-
     X_train_tensor = torch.tensor(X_train_new.values, dtype=torch.float32)
     X_val_tensor = torch.tensor(X_val_new.values, dtype=torch.float32)
-
     new_model = train_autoencoder(X_train_tensor, X_val_tensor, len(columns))
-
     models_cache[columns_tuple] = new_model
 
     return new_model
 
 def get_valid_columns_for_user(user_new, base_columns):
     valid_columns = []
-
     for col in base_columns:
         if col in ['diabetes', 'breakfast', 'dinner', 'lunch']:
             if user_new[col].iloc[0] != 0:
                 valid_columns.append(col)
-        elif col == 'type_encoded':
+        elif col in ['diet_encoded', 'allergy_encoded', 'type_encoded']:
             user_value = user_new[col].iloc[0]
             if user_value != -1 and user_value in encoded_values_range[col]:
                 valid_columns.append(col)
-        elif col in ['diet_encoded', 'allergy_encoded']:
-            user_value = user_new[col].iloc[0]
-            if user_value != -1 and user_value in encoded_values_range[col]:
-                valid_columns.append(col)
-                print(f"Included column {col} - value: {user_value}")
-            else:
-                print(f"Excluded column {col} - invalid value: {user_value}")
 
     return valid_columns
 
-def filter_meals_by_allergy(meal_data, user_allergy_encoded):
-    safe_meals_mask = meal_data['allergy_encoded'] == user_allergy_encoded
-    return meal_data[safe_meals_mask].copy()
-
-def get_recommendations_with_allergy_priority(user_new, valid_columns, data_new, meal_data, top_k=5):
+def get_recommendations_with_allergy_priority(user_new, valid_columns, data_new, meal_data):
 
     has_allergy = 'allergy_encoded' in valid_columns
     if has_allergy:
@@ -312,6 +294,7 @@ def recommend_meal():
           }
 
   user_df = pd.DataFrame([merged_data])
+  print(user_df)
   base_columns = ['diet_encoded', 'allergy_encoded', 'diabetes', 'type_encoded', 'breakfast', 'dinner', 'lunch']
   numerical_features = ['protein', 'calories', 'carb', 'fat']
   user_new = encoding(user_df)
@@ -321,12 +304,10 @@ def recommend_meal():
   if not valid_columns:
       return jsonify({"error": "No suitable recommendation "})
   recommendations = get_recommendations_with_allergy_priority(
-          user_new, valid_columns, data_new, meal_data, top_k=5
-  )
+          user_new, valid_columns, data_new, meal_data)
 
   if recommendations:
       best_recommendation = recommendations[0]
-
       response = {"recommended_meal_id": best_recommendation["meal_id"]}
       if not best_recommendation["is_allergy_safe"]:
           response["warning"] = "The recommended meal may not be suitable for your allergy. Please check ingredients carefully."
@@ -335,13 +316,6 @@ def recommend_meal():
   else:
       return jsonify({"error": "No suitable recommendations found"})
 
-# !pip install pyngrok
-# from pyngrok import ngrok
-
-# ngrok.set_auth_token("2xRwTGEb3FujRu2pPJHHMU7JUG9_4LKkn5T7TQmmGNvTpWbNJ")
-
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
-    # public_url = ngrok.connect(port)
-    # print(" * ngrok tunnel:", public_url)
     app.run(host="0.0.0.0", port=port)
